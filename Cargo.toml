@@ -1,0 +1,31 @@
+[package]
+name = "kubesieve"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Static security scanner for Kubernetes manifests"
+authors = ["Zlatko Anastasov"]
+license = "MIT"
+repository = "https://github.com/zaremifa-cell/kubesieve"
+keywords = ["kubernetes", "security", "lint", "sarif", "devsecops"]
+categories = ["command-line-utilities", "development-tools"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+owo-colors = "4.4.0"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+serde_yaml = "0.9.34"
+walkdir = "2.5.0"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"
+tempfile = "3.27.0"

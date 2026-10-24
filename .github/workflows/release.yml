@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: contains(matrix.target, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          name=kubesieve-${{ github.ref_name }}-${{ matrix.target }}
+          mkdir "$name"
+          cp README.md LICENSE "$name"/
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            cp target/${{ matrix.target }}/release/kubesieve.exe "$name"/
+            7z a "$name.zip" "$name"
+          else
+            cp target/${{ matrix.target }}/release/kubesieve "$name"/
+            tar czf "$name.tar.gz" "$name"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: kubesieve-*.*
+          generate_release_notes: true

@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: fmt · clippy · test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-targets
+
+  msrv:
+    name: minimum supported Rust (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --all-targets
+
+  # Dogfooding: scan this repository's own example manifests and publish the results
+  # to GitHub code scanning, the same way a team would use kubesieve on its own repo.
+  scan:
+    name: scan examples (SARIF)
+    runs-on: ubuntu-latest
+    needs: check
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - name: Hardened manifests must be clean
+        run: ./target/release/kubesieve scan examples/hardened --min-severity info
+      - name: Scan insecure manifests
+        run: ./target/release/kubesieve scan examples/insecure --format sarif --output kubesieve.sarif --no-fail
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: kubesieve.sarif
+          category: kubesieve
+
+  docker:
+    name: docker image builds and runs
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t kubesieve:ci .
+      - run: docker run --rm -v "$PWD/examples:/work:ro" kubesieve:ci scan /work/hardened
